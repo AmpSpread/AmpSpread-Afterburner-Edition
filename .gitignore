@@ -1,0 +1,8 @@
+*.obj
+*.lib
+*.exp
+*.pdb
+*.ilk
+*.exe
+Thumbs.db
+.DS_Store

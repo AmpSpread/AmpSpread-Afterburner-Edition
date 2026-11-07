@@ -1,0 +1,7 @@
+LIBRARY ampspread
+EXPORTS
+ SetupSource
+ GetSourcesNum
+ GetSourceDesc
+ GetSourceData
+ Uninit
