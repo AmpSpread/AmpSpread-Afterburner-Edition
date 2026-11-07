@@ -1,4 +1,4 @@
-AmpSpread Afterburner Edition v1.0.3-rc1
+AmpSpread Afterburner Edition v1.0.3
 
 This plugin monitors 12V-2x6 power cable current balance using per-pin current readings already published by MSI Afterburner's PSU.dll plugin. It is standalone and read-only.
 

@@ -1,94 +1,68 @@
 # AmpSpread Afterburner Edition
 
-### [⬇ Download AmpSpread Afterburner Edition v1.0.2 (ampspread.dll)](https://github.com/AmpSpread/AmpSpread-Afterburner-Edition/releases/download/v1.0.2/ampspread.dll)
+**A lightweight, standalone MSI Afterburner plugin for monitoring 12V-2×6 cable current balance.**
 
-[View the latest release and installation files](https://github.com/AmpSpread/AmpSpread-Afterburner-Edition/releases/latest)
+### [View latest release & downloads](https://github.com/AmpSpread/AmpSpread-Afterburner-Edition/releases/latest)
 
-**Standalone, read-only 12V-2×6 current-balance monitoring for MSI Afterburner.**
+AmpSpread adds live, average, and peak **per-pin current spread** readings to Afterburner's hardware monitor. It calculates the difference between the **highest** and **lowest** of six pin currents, using values already provided by MSI's `PSU.dll`. **No separate AmpSpread application or additional PSU polling is required.**
 
-## Download
+![AmpSpread Afterburner monitoring graphs](assets/image.png)
 
-**[Download AmpSpread.dll — v1.0.2 (Windows, 32-bit)](https://github.com/AmpSpread/AmpSpread-Afterburner-Edition/releases/download/v1.0.2/ampspread.dll)**
-
-[View release notes and downloads](https://github.com/AmpSpread/AmpSpread-Afterburner-Edition/releases/tag/v1.0.2)
-
-AmpSpread Afterburner Edition adds live, average and maximum **per-pin current spread** graphs to MSI Afterburner's hardware monitor. It uses the six current readings already supplied by MSI's `PSU.dll` plugin. You do **not** need to run the separate AmpSpread desktop application.
-
-![AmpSpread Afterburner Edition showing live, average, and maximum 12V-2x6 current spread](assets/image.png)
-
-*Screenshot: the plugin running in MSI Afterburner 4.6.7 Beta 3, reading an MSI MPG Ai1600TS PSU.*
+*AmpSpread running in MSI Afterburner 4.6.7 Beta 3 with an MSI MPG Ai1600TS PSU.*
 
 ## Monitoring graphs
 
-| Graph | Meaning | Default range |
-| --- | --- | --- |
-| **12V-2x6 current spread** | Current sample: highest of six pins minus lowest | 0–1.000 A |
-| **12V-2x6 average spread** | Running arithmetic mean of recorded spread samples | 0–0.500 A |
-| **12V-2x6 maximum spread** | Largest spread recorded during this monitoring session | 0–1.000 A |
-| **12V-2x6 active port** | Automatically selected PSU 12VHPWR port (1 or 2) | 0–2 |
+| Sensor | What it shows |
+| --- | --- |
+| **Current spread** | Live highest-pin minus lowest-pin current (A) |
+| **Average spread** | Elapsed-time-weighted average of reported spread (A) |
+| **Maximum spread** | Largest spread observed during the session (A) |
+| **Active port** | Automatically selected 12VHPWR port (1 or 2) |
+| **Data complete** | `1` = six currents available; `0` = missing/incomplete |
 
-All spread values display to three decimal places. Independent running statistics are retained for each PSU port; if both are populated, the complete six-pin group with the higher total current is selected.
-
-## Requirements
-
-- MSI Afterburner for Windows with support for 32-bit monitoring plugins (tested by a user with **4.6.7 Beta 3**).
-- MSI `PSU.dll` monitoring plugin enabled and publishing six per-pin currents for one 12VHPWR PSU port (for example, `PSU 12VHPWR1_1 current` through `PSU 12VHPWR1_6 current`, in amperes).
-- A compatible PSU reporting those currents; originally developed for the **MSI MPG Ai1600TS**.
+All spread readings display to three decimal places. Default graph limits are 0–1 A (current/maximum) and 0–0.5 A (average). The active port is selected from complete sets of six pins, with the higher total current taking precedence; statistics are kept independently for each port.
 
 ## Installation
 
-1. Completely exit MSI Afterburner, including its system-tray process.
-2. Download and copy [`ampspread.dll`](https://github.com/AmpSpread/AmpSpread-Afterburner-Edition/releases/download/v1.0.2/ampspread.dll) into:
+1. Open **Latest release & downloads** above and download `ampspread.dll` from the release's **Assets**.
+2. Completely exit MSI Afterburner, including its system-tray process.
+3. Copy `ampspread.dll` into:
    `C:\Program Files (x86)\MSI Afterburner\Plugins\Monitoring\`
-3. (Optional) Copy [`Help/Plugins/Monitoring/ampspread`](Help/Plugins/Monitoring/ampspread) into the corresponding Afterburner `Help\Plugins\Monitoring\` directory to add the plugin description.
-4. Restart MSI Afterburner. Open **Settings → Monitoring → [...]** and check **ampspread.dll**.
-5. In the monitoring sensor list, enable the AmpSpread graphs you want to display.
+4. Restart Afterburner. Go to **Settings → Monitoring → […]**, enable **ampspread.dll**, and enable the desired graphs.
+5. Optional: copy the repository's `Help/Plugins/Monitoring/ampspread` file into Afterburner's matching help directory for the plugin description.
 
-**Upgrading from PSUSpread:** remove the old `PSUSpread.dll` first to prevent duplicate monitoring sensors.
+If you used the older **PSUSpread** plugin, remove `PSUSpread.dll` to prevent duplicate sensors.
 
-## Reset for a cable comparison
+**Requirements:** MSI Afterburner for Windows with support for 32-bit monitoring plugins, the built-in `PSU.dll` module enabled, and a compatible PSU exposing six individual 12V-2×6 currents in amperes. Developed using the **MSI MPG Ai1600TS**.
 
-Open **Settings → Monitoring → [...] → ampspread.dll → Setup → Yes**. This resets the session average and maximum for both PSU ports, without changing PSU settings or Afterburner's hardware polling. Restarting Afterburner also resets the session.
+## Using AmpSpread
 
-For meaningful comparisons, keep GPU load, Afterburner polling interval, test duration and ambient conditions as consistent as practical.
+**Reset statistics:** Settings → Monitoring → Plugins → `ampspread.dll` → **Setup** → **Yes**. Reset before comparing different cables. Match GPU load, test duration, and polling interval as closely as practical.
 
-## How it works
+**How it works:**
 
 ```text
-MSI PSU telemetry → MSI's PSU.dll → Afterburner MAHMSharedMemory
-                                         ↓ (read-only)
-                                   ampspread.dll
-                                         ↓
-                      Live / average / maximum spread graphs
+MSI PSU → PSU.dll → Afterburner shared memory
+                               ↓ read-only
+                          ampspread.dll
+                               ↓
+                    Spread monitoring graphs
 ```
 
-The DLL opens Afterburner's shared-memory mapping as **read-only**. It never communicates directly with the PSU, installs drivers, starts services, controls the GPU power limit or modifies Safeguard+ settings.
+The DLL only reads current values **already published by Afterburner**. It does not send commands to the PSU, change Safeguard+ settings, install a driver, or run a background service.
 
-## Test build: v1.0.3-rc1
+## Important notes
 
-[Download v1.0.3-rc1 prerelease DLL](https://github.com/AmpSpread/AmpSpread-Afterburner-Edition/releases/download/v1.0.3-rc1/ampspread.dll) — experimental; v1.0.2 above remains the stable download.
+- The average uses elapsed-time weighting to reduce callback-rate bias; it still represents **published monitoring values**, not every physical PSU sample.
+- Previously saved Afterburner graph ranges may override the defaults. Refresh timing and any lag introduced by the host's sensor-polling pipeline remain outside the DLL's control.
+- Missing or incomplete data is marked unavailable rather than presented as a legitimate zero spread; the **Data complete** sensor shows this separately.
+- **Current balance alone cannot prove a connector safe.** Seating, resistance, temperature, and other faults matter. AmpSpread is **monitoring-only**, not a hardware protection or shutdown mechanism.
+- The DLL is **unsigned**; release assets include a SHA-256 checksum for integrity verification. Don't disable Windows security features just to run it.
 
-Changes: **time-weighted average** (less polling-rate bias), exclusion of missing-data gaps, six-pin snapshot recheck, and optional **data complete** sensor (1/0). Current, average, maximum, and active-port names remain unchanged.
+## Source and development
 
-## Remaining limitations
+- [Source code](src/ampspread.c) · [Windows build script](build-windows.cmd) · [Linux cross-build script](build-linux.sh) · [Automated tests](tests/test_spread.c)
+- [All releases and previous versions](https://github.com/AmpSpread/AmpSpread-Afterburner-Edition/releases)
+- [MIT license](LICENSE)
 
-- Changing the DLL's default graph ranges won't necessarily overwrite previously saved graph limits in Afterburner.
-- The prerelease's elapsed-time-weighted mean reduces callback-rate bias but does **not** distinguish an unchanged physical reading from a duplicate published reading. PSU sample timestamps/sequence IDs are not exposed. Keep polling and test conditions consistent for A/B comparisons.
-- Afterburner controls the order/timing of its PSU readings and shared-memory publication. The DLL cannot guarantee elimination of up to one polling interval of graph lag without independent hardware access.
-- Missing or incomplete per-pin data is intentionally reported as unavailable (not 0 A); the prerelease adds a separate **data complete** status sensor. Completeness is not a guarantee of hardware freshness.
-- A small current spread does **not** establish that a power connector is safe: contact resistance, seating, temperature and other faults also matter. This plugin is **not** a protection or shutdown device.
-- The DLL is **unsigned** until the project obtains a trusted code-signing certificate. A published SHA-256 checksum helps verify file integrity but is not a substitute for Authenticode signing. Don't disable Windows security features solely to run it.
-
-## Build and test
-
-The C source is in [`src/ampspread.c`](src/ampspread.c) and its exports in [`src/ampspread.def`](src/ampspread.def).
-
-On Windows, run `build-windows.cmd` from a **Visual Studio 2022 x86 Native Tools Command Prompt** with C++ build tools installed. For cross-compiling on Linux, use `build-linux.sh` (Clang, lld-link and Python 3).
-
-Synthetic spread tests are in [`tests/test_spread.c`](tests/test_spread.c). The plugin has been demonstrated running in MSI Afterburner 4.6.7 Beta 3 (see screenshot). This is not an official MSI project.
-
-## License
-
-MIT — see [LICENSE](LICENSE).
-
-**AmpSpread Afterburner Edition** is separate from the full AmpSpread desktop application.
+This is an independent community project, **not officially affiliated with MSI**, and is separate from the full AmpSpread desktop application.
