@@ -2,6 +2,12 @@
 
 **Standalone, read-only 12V-2×6 current-balance monitoring for MSI Afterburner.**
 
+## Download
+
+**[Download AmpSpread.dll — v1.0.2 (Windows, 32-bit)](https://github.com/AmpSpread/AmpSpread-Afterburner-Edition/releases/download/v1.0.2/ampspread.dll)**
+
+[View release notes and downloads](https://github.com/AmpSpread/AmpSpread-Afterburner-Edition/releases/tag/v1.0.2)
+
 AmpSpread Afterburner Edition adds live, average and maximum **per-pin current spread** graphs to MSI Afterburner's hardware monitor. It uses the six current readings already supplied by MSI's `PSU.dll` plugin. You do **not** need to run the separate AmpSpread desktop application.
 
 ![AmpSpread Afterburner Edition showing live, average, and maximum 12V-2x6 current spread](assets/afterburner-current-spread.webp)
@@ -28,7 +34,7 @@ All spread values display to three decimal places. Independent running statistic
 ## Installation
 
 1. Completely exit MSI Afterburner, including its system-tray process.
-2. Copy [`ampspread.dll`](ampspread.dll) into:
+2. Download and copy [`ampspread.dll`](https://github.com/AmpSpread/AmpSpread-Afterburner-Edition/releases/download/v1.0.2/ampspread.dll) into:
    `C:\Program Files (x86)\MSI Afterburner\Plugins\Monitoring\`
 3. (Optional) Copy [`Help/Plugins/Monitoring/ampspread`](Help/Plugins/Monitoring/ampspread) into the corresponding Afterburner `Help\Plugins\Monitoring\` directory to add the plugin description.
 4. Restart MSI Afterburner. Open **Settings → Monitoring → [...]** and check **ampspread.dll**.
