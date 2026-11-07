@@ -18,6 +18,10 @@ jobs:
         run: |
           cc -O2 -Wall -Wextra tests/test_spread.c -lm -o /tmp/test_spread
           /tmp/test_spread
+      - name: Install Windows cross-linker
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y clang lld
       - name: Build Windows 32-bit plugin
         run: bash build-linux.sh
       - name: Validate Windows executable
