@@ -64,14 +64,20 @@ MSI PSU telemetry → MSI's PSU.dll → Afterburner MAHMSharedMemory
 
 The DLL opens Afterburner's shared-memory mapping as **read-only**. It never communicates directly with the PSU, installs drivers, starts services, controls the GPU power limit or modifies Safeguard+ settings.
 
-## Known limitations
+## Test build: v1.0.3-rc1
+
+[Download v1.0.3-rc1 prerelease DLL](https://github.com/AmpSpread/AmpSpread-Afterburner-Edition/releases/download/v1.0.3-rc1/ampspread.dll) — experimental; v1.0.2 above remains the stable download.
+
+Changes: **time-weighted average** (less polling-rate bias), exclusion of missing-data gaps, six-pin snapshot recheck, and optional **data complete** sensor (1/0). Current, average, maximum, and active-port names remain unchanged.
+
+## Remaining limitations
 
 - Changing the DLL's default graph ranges won't necessarily overwrite previously saved graph limits in Afterburner.
-- The average is computed over successfully sampled monitoring snapshots; duplicate underlying PSU readings can be counted if Afterburner polls faster than MSI's PSU plugin updates. For A/B cable tests, use a consistent polling period.
-- The graph may lag the PSU plugin by one monitoring interval.
-- Missing or incomplete per-pin data is reported as unavailable rather than as a valid 0 A reading.
+- The prerelease's elapsed-time-weighted mean reduces callback-rate bias but does **not** distinguish an unchanged physical reading from a duplicate published reading. PSU sample timestamps/sequence IDs are not exposed. Keep polling and test conditions consistent for A/B comparisons.
+- Afterburner controls the order/timing of its PSU readings and shared-memory publication. The DLL cannot guarantee elimination of up to one polling interval of graph lag without independent hardware access.
+- Missing or incomplete per-pin data is intentionally reported as unavailable (not 0 A); the prerelease adds a separate **data complete** status sensor. Completeness is not a guarantee of hardware freshness.
 - A small current spread does **not** establish that a power connector is safe: contact resistance, seating, temperature and other faults also matter. This plugin is **not** a protection or shutdown device.
-- The DLL is **unsigned**. Don't disable Windows security features solely to run it.
+- The DLL is **unsigned** until the project obtains a trusted code-signing certificate. A published SHA-256 checksum helps verify file integrity but is not a substitute for Authenticode signing. Don't disable Windows security features solely to run it.
 
 ## Build and test
 
