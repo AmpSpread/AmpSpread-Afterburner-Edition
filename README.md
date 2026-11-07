@@ -14,7 +14,7 @@
 
 AmpSpread Afterburner Edition adds live, average and maximum **per-pin current spread** graphs to MSI Afterburner's hardware monitor. It uses the six current readings already supplied by MSI's `PSU.dll` plugin. You do **not** need to run the separate AmpSpread desktop application.
 
-![AmpSpread Afterburner Edition showing live, average, and maximum 12V-2x6 current spread](assets/afterburner-current-spread.webp)
+![AmpSpread Afterburner Edition showing live, average, and maximum 12V-2x6 current spread](assets/image.png)
 
 *Screenshot: the plugin running in MSI Afterburner 4.6.7 Beta 3, reading an MSI MPG Ai1600TS PSU.*
 
