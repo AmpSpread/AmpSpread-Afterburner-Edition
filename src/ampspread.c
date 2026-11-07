@@ -1,5 +1,5 @@
 /*
- * AmpSpread Afterburner Edition v1.0.3-rc1 - MSI Afterburner 32-bit monitoring plugin.
+ * AmpSpread Afterburner Edition v1.0.3 - MSI Afterburner 32-bit monitoring plugin.
  * Read-only. No direct PSU IO, drivers, services or AmpSpread desktop app dependency.
  *
  * MSI Afterburner SDK interface references:
@@ -285,7 +285,7 @@ EXPORT BOOL __cdecl SetupSource(DWORD index, HWND window) {
             "Reset 12V-2x6 spread average and maximum for BOTH PSU ports?\n\n"
             "Use Reset between cable comparison tests.\n"
             "Current readings will remain read-only.",
-            "AmpSpread Afterburner Edition 1.0.3-rc1 - Reset statistics", MB_YESNO | MB_ICONQUESTION) == IDYES) {
+            "AmpSpread Afterburner Edition 1.0.3 - Reset statistics", MB_YESNO | MB_ICONQUESTION) == IDYES) {
         clear_stats();
     }
     return TRUE;

@@ -32,22 +32,22 @@ jobs:
       - name: Upload DLL as workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AmpSpread-Afterburner-Edition-v1.0.3-rc1
+          name: AmpSpread-Afterburner-Edition-v1.0.3
           path: ampspread.dll
           if-no-files-found: error
       - name: Produce SHA-256 checksum
         run: sha256sum ampspread.dll > ampspread.dll.sha256
-      - name: Publish v1.0.3 prerelease
+      - name: Publish stable v1.0.3
         if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view v1.0.3-rc1 >/dev/null 2>&1; then
-            echo "Prerelease v1.0.3-rc1 already exists; leaving it untouched."
+          if gh release view v1.0.3 >/dev/null 2>&1; then
+            echo "Stable release v1.0.3 already exists; leaving it untouched."
           else
-            gh release create v1.0.3-rc1 ampspread.dll ampspread.dll.sha256 \
-              --title "AmpSpread Afterburner Edition v1.0.3-rc1" \
-              --prerelease \
-              --notes-file RELEASE_NOTES_v1.0.3-rc1.md \
+            gh release create v1.0.3 ampspread.dll ampspread.dll.sha256 \
+              --title "AmpSpread Afterburner Edition v1.0.3" \
+              --latest \
+              --notes-file RELEASE_NOTES_v1.0.3.md \
               --target "$GITHUB_SHA"
           fi
