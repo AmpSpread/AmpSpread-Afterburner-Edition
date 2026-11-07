@@ -1,5 +1,9 @@
 # AmpSpread Afterburner Edition
 
+### [⬇ Download AmpSpread Afterburner Edition v1.0.2 (ampspread.dll)](https://github.com/AmpSpread/AmpSpread-Afterburner-Edition/releases/download/v1.0.2/ampspread.dll)
+
+[View the latest release and installation files](https://github.com/AmpSpread/AmpSpread-Afterburner-Edition/releases/latest)
+
 **Standalone, read-only 12V-2×6 current-balance monitoring for MSI Afterburner.**
 
 ## Download
