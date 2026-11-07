@@ -53,7 +53,7 @@ int main(void) {
     MONITORING_SOURCE_DESC d = {0};
     d.dwVersion = 0x10000;
     setup();
-    if (GetSourcesNum() != 4 || !GetSourceDesc(0,&d) || strcmp(d.szFormat,"%.3f")) return 1;
+    if (GetSourcesNum() != 5 || !GetSourceDesc(0,&d) || strcmp(d.szFormat,"%.3f")) return 1;
     assert_near(d.fltMinLimit,0.0f); assert_near(d.fltMaxLimit,1.0f);
     if(!GetSourceDesc(1,&d)) return 9;
     assert_near(d.fltMinLimit,0.0f); assert_near(d.fltMaxLimit,0.5f);
@@ -61,6 +61,8 @@ int main(void) {
     assert_near(d.fltMinLimit,0.0f); assert_near(d.fltMaxLimit,1.0f);
     if(!GetSourceDesc(3,&d)) return 11;
     assert_near(d.fltMinLimit,0.0f); assert_near(d.fltMaxLimit,2.0f);
+    if(!GetSourceDesc(4,&d)) return 12;
+    assert_near(d.fltMinLimit,0.0f); assert_near(d.fltMaxLimit,1.0f);
     if (GetSourceDesc(999,&d)) return 2;
     for(int i=0;i<6;i++) entry(0,i,1.1f);
     entry(0,0,1.2f); entry(0,1,1.1f); entry(0,2,1.3f);
@@ -68,13 +70,13 @@ int main(void) {
     assert_near(GetSourceData(1),0.2f);
     assert_near(GetSourceData(2),0.2f);
     assert_near(GetSourceData(3),1.0f);
-    if(stats[0].samples!=1) return 3;
+    if(!stats[0].initialized || stats[0].measuredMs != 0) return 3;
     tick+=250;
     entry(0,0,1.0f); entry(0,1,1.0f); entry(0,2,1.4f);
     assert_near(GetSourceData(0),0.4f);
     assert_near(GetSourceData(1),0.3f);
     assert_near(GetSourceData(2),0.4f);
-    if(stats[0].samples!=2) return 4;
+    if(stats[0].measuredMs!=250) return 4;
     tick+=250;
     for(int i=0;i<6;i++) entry(1,i,2.0f);
     entry(1,3,2.6f);
@@ -85,14 +87,45 @@ int main(void) {
     tick+=250;
     if(!SetupSource(0xFFFFFFFFu,(HWND)1)) return 5;
     assert_near(GetSourceData(1),0.6f);
-    if(stats[1].samples!=1) return 6;
+    if(!stats[1].initialized || stats[1].measuredMs != 0) return 6;
     tick+=250;
     mapEnabled=0;
     if(GetSourceData(0)!=FLOAT_UNAVAILABLE) return 7;
+    assert_near(GetSourceData(4),0.0f);
     mapEnabled=1;
     tick+=250;
     ((MAHM_HEADER*)mapped)->numEntries=9999;
     if(GetSourceData(0)!=FLOAT_UNAVAILABLE) return 8;
-    puts("PASS: ABI descriptions and default graph limits, 6-pin spread, average, max, port selection, reset, missing map, bounds check");
+    setup(); tick = 10000;
+    /* A stable value held for 2 seconds must not get extra votes at 100 ms. */
+    for(int i=0;i<6;i++) entry(0,i,2.0f);
+    entry(0,0,2.2f);
+    assert_near(GetSourceData(0),0.2f);
+    for(int i=0;i<20;i++) {
+        tick += 100;
+        GetSourceData(0);
+    }
+    assert_near(GetSourceData(1),0.2f);
+    if(stats[0].measuredMs != 2000) return 13;
+    entry(0,0,2.6f);
+    tick += 500;
+    assert_near(GetSourceData(0),0.6f);
+    assert_near(GetSourceData(1),0.24f);
+    tick += 6000;
+    entry(0,0,2.8f);
+    GetSourceData(0);
+    assert_near(GetSourceData(1),0.24f);
+    assert_near(GetSourceData(2),0.8f);
+    assert_near(GetSourceData(4),1.0f);
+    tick+=100;
+    mapEnabled=0;
+    if(GetSourceData(0)!=FLOAT_UNAVAILABLE) return 14;
+    mapEnabled=1;
+    tick+=100;
+    entry(0,0,3.0f);
+    GetSourceData(0);
+    if(stats[0].measuredMs!=2500) return 15;
+    assert_near(GetSourceData(1),0.24f);
+    puts("PASS: ABI, ranges, spread, weighted mean, max, ports, reset, invalid input, status, gaps, bounds");
     return 0;
 }

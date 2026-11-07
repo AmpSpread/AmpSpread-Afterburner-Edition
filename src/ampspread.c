@@ -1,5 +1,5 @@
 /*
- * AmpSpread Afterburner Edition v1.0.2 - MSI Afterburner 32-bit monitoring plugin.
+ * AmpSpread Afterburner Edition v1.0.3-rc1 - MSI Afterburner 32-bit monitoring plugin.
  * Read-only. No direct PSU IO, drivers, services or AmpSpread desktop app dependency.
  *
  * MSI Afterburner SDK interface references:
@@ -66,12 +66,21 @@ typedef struct BANK {
     float total;
 } BANK;
 
+/* Time-weighted mean of reported spread, independent of callback count.
+ * MAHM does not expose an individual PSU hardware-sample sequence number. */
 typedef struct STATS {
-    double sum;
-    DWORD samples;
+    double integralAmpMs;
+    unsigned long long measuredMs;
+    DWORD lastTick;
+    int initialized;
+    int interrupted;
     float current;
+    float average;
     float maximum;
 } STATS;
+
+#define MAX_ACCOUNTED_GAP_MS 2000u
+#define CALLBACK_CACHE_MS 25u
 
 static STATS stats[2];
 static DWORD lastSampleTick;
@@ -82,9 +91,13 @@ static int dataValid;
 static void clear_stats(void) {
     int b;
     for (b = 0; b < 2; ++b) {
-        stats[b].sum = 0.0;
-        stats[b].samples = 0;
+        stats[b].integralAmpMs = 0.0;
+        stats[b].measuredMs = 0;
+        stats[b].lastTick = 0;
+        stats[b].initialized = 0;
+        stats[b].interrupted = 0;
         stats[b].current = 0.0f;
+        stats[b].average = 0.0f;
         stats[b].maximum = 0.0f;
     }
     haveSampleTick = 0;
@@ -134,7 +147,7 @@ static int snapshot(BANK bank[2]) {
     HANDLE mapping;
     const BYTE *p;
     const MAHM_HEADER *h;
-    DWORD totalSize, i;
+    DWORD totalSize, i, expectedEntries, expectedEntrySize, expectedHeaderSize;
     int b, pin;
     mapping = OpenFileMappingA(FILE_MAP_READ, FALSE, "MAHMSharedMemory");
     if (!mapping) return 0;
@@ -164,8 +177,11 @@ static int snapshot(BANK bank[2]) {
         UnmapViewOfFile(p); CloseHandle(mapping); return 0;
     }
 
-    for (i = 0; i < h->numEntries; ++i) {
-        const BYTE *entry = p + h->headerSize + i * h->entrySize;
+    expectedEntries = h->numEntries;
+    expectedEntrySize = h->entrySize;
+    expectedHeaderSize = h->headerSize;
+    for (i = 0; i < expectedEntries; ++i) {
+        const BYTE *entry = p + expectedHeaderSize + i * expectedEntrySize;
         float amps;
         if (!classify_entry((const char *)entry, (const char *)(entry+260), &b, &pin)) continue;
         amps = *(const float *)(entry + 1300);
@@ -176,28 +192,60 @@ static int snapshot(BANK bank[2]) {
         bank[b].total += amps;
         bank[b].foundCount++;
     }
+    /* Best-effort check that no per-pin reading changed during the scan. */
+    if ((h->signature != 0x4D41484Du && h->signature != 0x4D48414Du)
+        || h->numEntries != expectedEntries || h->entrySize != expectedEntrySize
+        || h->headerSize != expectedHeaderSize) {
+        UnmapViewOfFile(p); CloseHandle(mapping); return 0;
+    }
+    for (i = 0; i < expectedEntries; ++i) {
+        const BYTE *entry = p + expectedHeaderSize + i * expectedEntrySize;
+        int port, pinIndex;
+        if (classify_entry((const char *)entry, (const char *)(entry + 260), &port, &pinIndex)
+            && bank[port].found[pinIndex]) {
+            float check = *(const float *)(entry + 1300);
+            if (check != bank[port].a[pinIndex]) {
+                UnmapViewOfFile(p); CloseHandle(mapping); return 0;
+            }
+        }
+    }
+    if (h->numEntries != expectedEntries || h->entrySize != expectedEntrySize
+        || h->headerSize != expectedHeaderSize) {
+        UnmapViewOfFile(p); CloseHandle(mapping); return 0;
+    }
     UnmapViewOfFile(p);
     CloseHandle(mapping);
     return 1;
 }
 
+static void mark_data_unavailable(void) {
+    int b;
+    dataValid = 0;
+    activeBank = -1;
+    for (b = 0; b < 2; ++b) stats[b].interrupted = 1;
+}
+
+/* Refresh from Afterburner's shared memory; never poll the PSU directly. */
 static void update_spread(void) {
     DWORD now = GetTickCount();
     BANK bank[2] = {0};
+    STATS *st;
     int b, i;
     float minVal, maxVal, spread;
-    if (haveSampleTick && ((DWORD)(now - lastSampleTick)) < 50u) return;
+    DWORD delta;
+
+    /* Cache callbacks for the same Afterburner monitoring cycle. */
+    if (dataValid && haveSampleTick && (DWORD)(now - lastSampleTick) < CALLBACK_CACHE_MS)
+        return;
     lastSampleTick = now;
     haveSampleTick = 1;
-    if (!snapshot(bank)) { dataValid = 0; activeBank = -1; return; }
+    if (!snapshot(bank)) { mark_data_unavailable(); return; }
 
-    /* Select the complete set of six pins drawing the most current.
-       If both ports are populated, this is the predominant GPU load. */
     b = -1;
     if (bank[0].foundCount == 6 && bank[0].total > 0.01f) b = 0;
     if (bank[1].foundCount == 6 && bank[1].total > 0.01f
         && (b < 0 || bank[1].total > bank[0].total)) b = 1;
-    if (b < 0) { dataValid = 0; activeBank = -1; return; }
+    if (b < 0) { mark_data_unavailable(); return; }
 
     minVal = bank[b].a[0]; maxVal = bank[b].a[0];
     for (i = 1; i < 6; ++i) {
@@ -205,18 +253,30 @@ static void update_spread(void) {
         if (bank[b].a[i] > maxVal) maxVal = bank[b].a[i];
     }
     spread = maxVal - minVal;
+    st = &stats[b];
+
+    if (!st->initialized) {
+        st->initialized = 1;
+        st->current = spread;
+        st->average = spread;
+        st->maximum = spread;
+        st->lastTick = now;
+    } else {
+        /* Trapezoidal time weighting prevents callback frequency from
+           deciding the average. Gaps/invalid data are excluded. */
+        delta = (DWORD)(now - st->lastTick);
+        if (!st->interrupted && delta > 0 && delta <= MAX_ACCOUNTED_GAP_MS) {
+            st->integralAmpMs += 0.5 * ((double)st->current + (double)spread) * (double)delta;
+            st->measuredMs += (unsigned long long)delta;
+            st->average = (float)(st->integralAmpMs / (double)st->measuredMs);
+        }
+        st->lastTick = now;
+        st->interrupted = 0;
+        st->current = spread;
+        if (spread > st->maximum) st->maximum = spread;
+    }
     activeBank = b;
     dataValid = 1;
-    stats[b].current = spread;
-    if (stats[b].samples == 0 || spread > stats[b].maximum) stats[b].maximum = spread;
-    /* Maintain a bounded running mean over the whole monitoring session. */
-    if (stats[b].samples != 0xFFFFFFFFu) {
-        stats[b].sum += (double)spread;
-        stats[b].samples++;
-    } else {
-        stats[b].sum = (stats[b].sum / (double)stats[b].samples) * 0.999999;
-        stats[b].samples = 1;
-    }
 }
 
 EXPORT BOOL __cdecl SetupSource(DWORD index, HWND window) {
@@ -225,23 +285,24 @@ EXPORT BOOL __cdecl SetupSource(DWORD index, HWND window) {
             "Reset 12V-2x6 spread average and maximum for BOTH PSU ports?\n\n"
             "Use Reset between cable comparison tests.\n"
             "Current readings will remain read-only.",
-            "AmpSpread Afterburner Edition 1.0.2 - Reset statistics", MB_YESNO | MB_ICONQUESTION) == IDYES) {
+            "AmpSpread Afterburner Edition 1.0.3-rc1 - Reset statistics", MB_YESNO | MB_ICONQUESTION) == IDYES) {
         clear_stats();
     }
     return TRUE;
 }
 
-EXPORT DWORD __cdecl GetSourcesNum(void) { return 4u; }
+EXPORT DWORD __cdecl GetSourcesNum(void) { return 5u; }
 
 EXPORT BOOL __cdecl GetSourceDesc(DWORD index, MONITORING_SOURCE_DESC *desc) {
-    if (!desc || index > 3 || desc->dwVersion < 0x00010000u) return FALSE;
+    if (!desc || index > 4 || desc->dwVersion < 0x00010000u) return FALSE;
     put_text(desc->szName, MAX_PATH,
          index == 0 ? "12V-2x6 current spread" :
          index == 1 ? "12V-2x6 average spread" :
          index == 2 ? "12V-2x6 maximum spread" :
-                      "12V-2x6 active port");
-    put_text(desc->szUnits, MAX_PATH, index == 3 ? "" : "A");
-    put_text(desc->szFormat, MAX_PATH, index == 3 ? "%.0f" : "%.3f");
+         index == 3 ? "12V-2x6 active port" :
+                      "12V-2x6 data complete");
+    put_text(desc->szUnits, MAX_PATH, index >= 3 ? "" : "A");
+    put_text(desc->szFormat, MAX_PATH, index >= 3 ? "%.0f" : "%.3f");
     put_text(desc->szGroup, MAX_PATH, "AmpSpread Afterburner Edition");
     desc->dwID = ID_PLUGIN_PSU;
     desc->dwInstance = 0;
@@ -249,7 +310,8 @@ EXPORT BOOL __cdecl GetSourceDesc(DWORD index, MONITORING_SOURCE_DESC *desc) {
     /* Default visual ranges; Afterburner may retain a user's previously saved graph limits. */
     desc->fltMaxLimit = index == 0 ? 1.0f :
                         index == 1 ? 0.5f :
-                        index == 2 ? 1.0f : 2.0f;
+                        index == 2 ? 1.0f :
+                        index == 3 ? 2.0f : 1.0f;
     put_text(desc->szNameTemplate, MAX_PATH, "");
     put_text(desc->szGroupTemplate, MAX_PATH, "");
     return TRUE;
@@ -257,13 +319,14 @@ EXPORT BOOL __cdecl GetSourceDesc(DWORD index, MONITORING_SOURCE_DESC *desc) {
 
 EXPORT float __cdecl GetSourceData(DWORD index) {
     STATS *s;
-    if (index > 3) return FLOAT_UNAVAILABLE;
+    if (index > 4) return FLOAT_UNAVAILABLE;
     update_spread();
+    if (index == 4) return dataValid ? 1.0f : 0.0f;
     if (!dataValid || activeBank < 0) return FLOAT_UNAVAILABLE;
     s = &stats[activeBank];
     if (index == 3) return (float)(activeBank + 1);
     if (index == 0) return s->current;
-    if (index == 1) return s->samples ? (float)(s->sum / (double)s->samples) : FLOAT_UNAVAILABLE;
+    if (index == 1) return s->initialized ? s->average : FLOAT_UNAVAILABLE;
     return s->maximum;
 }
 

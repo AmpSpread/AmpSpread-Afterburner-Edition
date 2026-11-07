@@ -1,11 +1,12 @@
-AmpSpread Afterburner Edition v1.0.2
+AmpSpread Afterburner Edition v1.0.3-rc1
 
 This plugin monitors 12V-2x6 power cable current balance using per-pin current readings already published by MSI Afterburner's PSU.dll plugin. It is standalone and read-only.
 
 Monitoring features:
 - Current spread: highest of six pin currents minus lowest (A).
-- Average spread: running average of valid spread samples (A).
+- Average spread: elapsed-time-weighted mean of reported spread (A).
 - Maximum spread: highest spread observed during this monitoring session (A).
+- Data complete: 1 when all six pins are present; 0 when unavailable.
 - Active port: automatically identifies 12VHPWR port 1 or port 2.
 
 Requirements:
