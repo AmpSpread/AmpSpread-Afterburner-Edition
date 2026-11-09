@@ -466,6 +466,31 @@ static void update_spread(void) {
     dataValid = 1;
 }
 
+/* Compact diagnostic string formatting, used only in the Setup dialog. */
+static void append_text(char *dst, unsigned int cap, const char *add) {
+    unsigned int n = 0, i = 0;
+    while (n < cap && dst[n]) ++n;
+    while (n + i + 1 < cap && add[i]) { dst[n+i] = add[i]; ++i; }
+    if (n + i < cap) dst[n+i] = 0;
+}
+static void append_decimal(char *dst, unsigned int cap, DWORD value) {
+    char digit[16]; int i = 0;
+    if (!value) { append_text(dst, cap, "0"); return; }
+    while (value && i < 15) { digit[i++] = (char)('0' + value % 10); value /= 10; }
+    while (i) { char x[2] = { digit[--i], 0 }; append_text(dst, cap, x); }
+}
+static void append_hex(char *dst, unsigned int cap, DWORD value) {
+    int shift;
+    append_text(dst, cap, "0x");
+    for (shift = 28; shift >= 0; shift -= 4) {
+        char x[2] = { "0123456789ABCDEF"[(value >> shift) & 15u], 0 };
+        append_text(dst, cap, x);
+    }
+}
+static void append_bool(char *dst, unsigned int cap, LONG value) {
+    append_text(dst, cap, value ? "YES" : "NO");
+}
+
 EXPORT BOOL __cdecl SetupSource(DWORD index, HWND window) {
     if (!window) return (index == 0xFFFFFFFFu) ? TRUE : FALSE;
     if (MessageBoxA(window,
