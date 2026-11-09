@@ -492,13 +492,36 @@ static void append_bool(char *dst, unsigned int cap, LONG value) {
 }
 
 EXPORT BOOL __cdecl SetupSource(DWORD index, HWND window) {
+    char message[1200];
+    message[0] = 0;
     if (!window) return (index == 0xFFFFFFFFu) ? TRUE : FALSE;
-    if (MessageBoxA(window,
-            "Reset 12V-2x6 spread average and maximum for BOTH PSU ports?\n\n"
-            "Use Reset between cable comparison tests.\n"
-            "Current readings will remain read-only.",
-            "AmpSpread Afterburner Edition 1.0.4 - Reset statistics", MB_YESNO | MB_ICONQUESTION) == IDYES) {
-        clear_stats();
+    append_text(message, sizeof(message), "AmpSpread v1.0.4 HOTKEY DIAGNOSTICS\n\n");
+    append_text(message, sizeof(message), "Watcher active: ");
+    append_bool(message, sizeof(message), hotkeyWatcherRunning && watcherState == 1);
+    append_text(message, sizeof(message), " (state ");
+    append_decimal(message, sizeof(message), (DWORD)watcherState);
+    append_text(message, sizeof(message), ")\nConfig path: ");
+    append_text(message, sizeof(message), lastConfigPath[0] ? lastConfigPath : "not yet read");
+    append_text(message, sizeof(message), "\nClearHistoryHotkey: ");
+    append_text(message, sizeof(message), lastRawHotkey[0] ? lastRawHotkey : "not yet read");
+    append_text(message, sizeof(message), " (decoded ");
+    append_hex(message, sizeof(message), lastDecodedHotkey);
+    append_text(message, sizeof(message), ")\nHotkey config found: ");
+    append_bool(message, sizeof(message), !watcherConfigError && watcherConfigRead > 0);
+    append_text(message, sizeof(message), "\nHotkey assigned: ");
+    append_bool(message, sizeof(message), hotkeyConfigured);
+    append_text(message, sizeof(message), "\nHotkey press events seen: ");
+    append_decimal(message, sizeof(message), (DWORD)hotkeySeenCount);
+    append_text(message, sizeof(message), "\nResets applied: ");
+    append_decimal(message, sizeof(message), (DWORD)hotkeyResetAppliedCount);
+    append_text(message, sizeof(message), "\nLast check: main key down ");
+    append_bool(message, sizeof(message), lastHotkeyMainDown);
+    append_text(message, sizeof(message), ", modifiers match ");
+    append_bool(message, sizeof(message), lastHotkeyModifierMatch);
+    append_text(message, sizeof(message), "\n\nYES: Reset AmpSpread stats now.\nNO: Close without resetting.");
+    if (MessageBoxA(window, message,
+            "AmpSpread Afterburner Edition 1.0.4 - diagnostics", MB_YESNO | MB_ICONQUESTION) == IDYES) {
+        InterlockedExchange(&resetPending, 1);
     }
     return TRUE;
 }
