@@ -29,6 +29,42 @@ int WINAPI MessageBoxA(HWND h, LPCSTR text, LPCSTR title, UINT flags) {
     return IDYES;
 }
 
+/* Native Windows functions stubbed for portable calculation tests. */
+DWORD WINAPI GetModuleFileNameA(HMODULE h, char* out, DWORD n) {
+    const char* path = "C:\\Program Files (x86)\\MSI Afterburner\\MSIAfterburner.exe";
+    (void)h;
+    if (n < strlen(path) + 1) return 0;
+    strcpy(out,path);
+    return (DWORD)strlen(path);
+}
+static int configLocation = 1; /* 1 Profiles, 2 root, 3 missing */
+DWORD WINAPI GetPrivateProfileStringA(LPCSTR section, LPCSTR key, LPCSTR fallback, char* out, DWORD n, LPCSTR filename) {
+    const char* value = "00020076h";
+    int inProfiles = strstr(filename, "\\Profiles\\MSIAfterburner.cfg") != 0;
+    int exists = configLocation == 1 ? inProfiles : configLocation == 2 ? !inProfiles : 0;
+    if (strcmp(section,"Settings") || strcmp(key,"ClearHistoryHotkey")) return 0;
+    if (!exists) value = fallback;
+    if (n < strlen(value)+1) return 0;
+    strcpy(out,value);
+    return (DWORD)strlen(value);
+}
+static int watcherPhase = 0;
+short WINAPI GetAsyncKeyState(int key) {
+    if (watcherPhase >= 1 && watcherPhase <= 2 && (key == VK_CONTROL || key == 0x76)) return (short)0x8000;
+    return 0;
+}
+HANDLE WINAPI CreateThread(void* p, SIZE_T size, DWORD(WINAPI *entryfn)(void*), void* argument, DWORD flags, DWORD* id) {
+    (void)p; (void)size; (void)entryfn; (void)argument; (void)flags; (void)id;
+    return 0;
+}
+void WINAPI Sleep(DWORD d) {
+    (void)d;
+    watcherPhase++;
+    if (watcherPhase > 4) hotkeyWatcherRunning = 0;
+}
+DWORD WINAPI WaitForSingleObject(HANDLE handle, DWORD timeout) { (void)handle; (void)timeout; return 0; }
+LONG WINAPI InterlockedExchange(volatile LONG* p, LONG x) { LONG old = *p; *p = x; return old; }
+
 static void entry(int b, int pin, float value) {
     char *p = (char *)mapped + 32 + (b * 6 + pin) * 1324;
     snprintf(p, 260, "PSU 12VHPWR%d_%d current", b + 1, pin + 1);
