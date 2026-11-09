@@ -507,6 +507,11 @@ EXPORT BOOL __cdecl GetSourceDesc(DWORD index, MONITORING_SOURCE_DESC *desc) {
 EXPORT float __cdecl GetSourceData(DWORD index) {
     STATS *s;
     if (index > 4) return FLOAT_UNAVAILABLE;
+    start_hotkey_watcher();
+    if (InterlockedExchange(&resetPending, 0)) {
+        clear_stats();
+        InterlockedExchange(&hotkeyResetAppliedCount, hotkeyResetAppliedCount + 1);
+    }
     update_spread();
     if (index == 4) return dataValid ? 1.0f : 0.0f;
     if (!dataValid || activeBank < 0) return FLOAT_UNAVAILABLE;
