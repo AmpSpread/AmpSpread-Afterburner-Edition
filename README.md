@@ -37,7 +37,7 @@ If you used the older **PSUSpread** plugin, remove `PSUSpread.dll` to prevent du
 
 ## Using AmpSpread
 
-**Reset statistics:** Settings → Monitoring → Plugins → `ampspread.dll` → **Setup** → **Yes**. Reset before comparing different cables. Match GPU load, test duration, and polling interval as closely as practical.
+**Reset statistics:** Configure **Clear monitoring history** in MSI Afterburner's Monitoring settings and use that hotkey. AmpSpread v1.0.4 detects the same shortcut and resets its own average and maximum spread without restarting Afterburner. The Setup dialog displays hotkey diagnostics and still supports a manual reset (choose **Yes**). The DLL reads the active `Profiles\\MSIAfterburner.cfg` with installation-root fallback. Match GPU load, test duration and polling interval for cable comparisons.
 
 **How it works:**
 
@@ -50,6 +50,13 @@ MSI PSU → PSU.dll → Afterburner shared memory
 ```
 
 The DLL only reads current values **already published by Afterburner**. It does not send commands to the PSU, change Safeguard+ settings, install a driver, or run a background service.
+
+## v1.0.4 changes
+
+- Clear monitoring history hotkey resets AmpSpread's accumulated average and maximum.
+- Five monitoring sources have distinct instance identities, helping keep graph statistics independent.
+- Preserves the v1.0.3 time-weighted average, data-complete indicator and long-gap handling.
+- [Full changelog](CHANGELOG.md) · [v1.0.4 release notes](RELEASE_NOTES_v1.0.4.md)
 
 ## Important notes
 
