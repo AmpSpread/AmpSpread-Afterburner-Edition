@@ -10,11 +10,18 @@ EXPORTS
  _UnmapViewOfFile@4 = UnmapViewOfFile
  _CloseHandle@4 = CloseHandle
  _GetTickCount@0 = GetTickCount
+ _GetModuleFileNameA@12 = GetModuleFileNameA
+ _GetPrivateProfileStringA@24 = GetPrivateProfileStringA
+ _CreateThread@24 = CreateThread
+ _Sleep@4 = Sleep
+ _WaitForSingleObject@8 = WaitForSingleObject
+ _InterlockedExchange@8 = InterlockedExchange
 DEF
 cat > build/user32.def <<'DEF'
 LIBRARY USER32.dll
 EXPORTS
  _MessageBoxA@16 = MessageBoxA
+ _GetAsyncKeyState@4 = GetAsyncKeyState
 DEF
 lld-link /dll /noentry /machine:x86 /def:build/kernel32.def /out:build/stubkernel32.dll /implib:build/kernel32.lib
 lld-link /dll /noentry /machine:x86 /def:build/user32.def /out:build/stubuser32.dll /implib:build/user32.lib
@@ -24,7 +31,7 @@ python3 - <<'PY'
 p='ampspread.dll'
 data=open(p,'rb').read()
 for name in ('OpenFileMappingA@12','MapViewOfFile@20','UnmapViewOfFile@4',
-             'CloseHandle@4','GetTickCount@0','MessageBoxA@16'):
+             'CloseHandle@4','GetTickCount@0','MessageBoxA@16','GetModuleFileNameA@12','GetPrivateProfileStringA@24','CreateThread@24','Sleep@4','WaitForSingleObject@8','InterlockedExchange@8','GetAsyncKeyState@4'):
     old=name.encode()+b'\0'
     assert data.count(old)==1, f'Unexpected DLL import shape: {name}'
     new=name.split('@')[0].encode()+b'\0'
