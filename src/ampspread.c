@@ -124,6 +124,157 @@ static DWORD lastDecodedHotkey;
 static char lastRawHotkey[40];
 static char lastConfigPath[MAX_PATH];
 
+
+/* Parse ClearHistoryHotkey, e.g. 00020076h (Ctrl+F7).
+   Upper word is HOTKEYF_SHIFT/CONTROL/ALT/EXTENDED, lower is virtual key. */
+static DWORD parse_hotkey(const char* value) {
+    DWORD x = 0;
+    unsigned int i, digits = 0;
+    if (!value) return 0;
+    for (i = 0; i < 20 && value[i] == ' '; ++i) { }
+    if (value[i] == '0' && (value[i+1] == 'x' || value[i+1] == 'X')) i += 2;
+    while (i < 20) {
+        int v;
+        char c = value[i++];
+        if (c >= '0' && c <= '9') v = c - '0';
+        else if (c >= 'a' && c <= 'f') v = c - 'a' + 10;
+        else if (c >= 'A' && c <= 'F') v = c - 'A' + 10;
+        else if ((c == 'h' || c == 'H') && digits > 0) break;
+        else if (c == 0 || c == ' ' || c == '\r' || c == '\n') break;
+        else return 0;
+        if (digits++ >= 8) return 0;
+        x = (x << 4) | (DWORD)v;
+    }
+    return x;
+}
+
+/* Strict modifier match; held keys trigger at most once until released. */
+static int hotkey_is_down(DWORD binding, int shift, int control, int alt, int key) {
+    DWORD flags = binding >> 16;
+    DWORD vk = binding & 0xFFFFu;
+    if (!vk || vk > 0xFEu || (flags & ~15u)) return 0;
+    if (!!(flags & HOTKEY_SHIFT) != !!shift) return 0;
+    if (!!(flags & HOTKEY_CONTROL) != !!control) return 0;
+    if (!!(flags & HOTKEY_ALT) != !!alt) return 0;
+    return !!key;
+}
+static int hotkey_pressed(DWORD binding, int shift, int control, int alt, int key, int *wasDown) {
+    int down = hotkey_is_down(binding, shift, control, alt, key);
+    int newPress = down && !*wasDown;
+    *wasDown = down;
+    return newPress;
+}
+
+/* Existing declaration below the watcher is used to build config paths. */
+static void put_text(char *out, unsigned int outLen, const char *src);
+
+/* Prefer active Profiles config, fall back to installation-root template. */
+static int config_paths(char profile[MAX_PATH], char root[MAX_PATH]) {
+    char exe[MAX_PATH];
+    DWORD length = GetModuleFileNameA((HMODULE)0, exe, MAX_PATH);
+    unsigned int sep = MAX_PATH, i, j;
+    const char *profileName = "Profiles\\MSIAfterburner.cfg";
+    const char *rootName = "MSIAfterburner.cfg";
+    if (!length || length >= MAX_PATH) return 0;
+    for (i = 0; i < length; ++i) if (exe[i] == '\\' || exe[i] == '/') sep = i + 1;
+    if (sep >= MAX_PATH) return 0;
+    for (i = 0; i < sep; ++i) { profile[i] = exe[i]; root[i] = exe[i]; }
+    for (j = 0; profileName[j] && sep + j + 1 < MAX_PATH; ++j) profile[sep+j] = profileName[j];
+    if (profileName[j]) return 0;
+    profile[sep+j] = 0;
+    for (j = 0; rootName[j] && sep + j + 1 < MAX_PATH; ++j) root[sep+j] = rootName[j];
+    if (rootName[j]) return 0;
+    root[sep+j] = 0;
+    return 1;
+}
+
+/* Read the configured key, without editing any Afterburner settings. */
+static int try_hotkey_file(const char* path, DWORD *hotkey) {
+    char value[40] = {0};
+    DWORD count = GetPrivateProfileStringA("Settings", "ClearHistoryHotkey", "NOT_FOUND", value, 40, path);
+    unsigned int i;
+    if (!count || (count == 9u && value[0]=='N' && value[1]=='O' &&
+        value[2]=='T' && value[3]=='_' && value[4]=='F' && value[5]=='O' &&
+        value[6]=='U' && value[7]=='N' && value[8]=='D')) return 0;
+    for (i = 0; i < sizeof(lastRawHotkey)-1 && value[i]; ++i) lastRawHotkey[i] = value[i];
+    lastRawHotkey[i] = 0;
+    *hotkey = parse_hotkey(value);
+    watcherConfigRead = (LONG)count;
+    watcherConfigError = 0;
+    hotkeyConfigured = *hotkey != 0;
+    lastDecodedHotkey = *hotkey;
+    put_text(lastConfigPath, MAX_PATH, path);
+    return 1;
+}
+static DWORD read_afterburner_hotkey(const char* profiles, const char* root) {
+    DWORD binding = 0;
+    if (try_hotkey_file(profiles, &binding) || try_hotkey_file(root, &binding)) return binding;
+    watcherConfigRead = 0;
+    watcherConfigError = 1;
+    hotkeyConfigured = 0;
+    lastDecodedHotkey = 0;
+    put_text(lastRawHotkey, sizeof(lastRawHotkey), "NOT_FOUND");
+    put_text(lastConfigPath, MAX_PATH, profiles);
+    return 0;
+}
+
+static DWORD WINAPI hotkey_watcher(void *ignored) {
+    char profiles[MAX_PATH], root[MAX_PATH];
+    DWORD binding = 0, nextReload = 0;
+    int wasDown = 0;
+    (void)ignored;
+    if (!config_paths(profiles, root)) { watcherConfigError = 2; watcherState = 3; return 0; }
+    put_text(lastConfigPath, MAX_PATH, profiles);
+    watcherState = 1;
+    while (hotkeyWatcherRunning) {
+        DWORD tick = GetTickCount();
+        if (nextReload == 0 || (DWORD)(tick-nextReload) < 0x80000000u) {
+            DWORD nextBinding = read_afterburner_hotkey(profiles, root);
+            if (nextBinding != binding) { binding = nextBinding; wasDown = 0; }
+            nextReload = tick + 2000u;
+        }
+        if (binding) {
+            int vk = (int)(binding & 0xFF);
+            int shift = (GetAsyncKeyState(VK_SHIFT) & KEY_DOWN) != 0;
+            int ctrl = (GetAsyncKeyState(VK_CONTROL) & KEY_DOWN) != 0;
+            int alt = (GetAsyncKeyState(VK_MENU) & KEY_DOWN) != 0;
+            int key = (GetAsyncKeyState(vk) & KEY_DOWN) != 0;
+            lastHotkeyMainDown = key;
+            lastHotkeyModifierMatch = (!!(binding & (HOTKEY_SHIFT << 16)) == !!shift &&
+                !!(binding & (HOTKEY_CONTROL << 16)) == !!ctrl &&
+                !!(binding & (HOTKEY_ALT << 16)) == !!alt);
+            if (hotkey_pressed(binding, shift, ctrl, alt, key, &wasDown)) {
+                InterlockedExchange(&resetPending, 1);
+                InterlockedExchange(&hotkeySeenCount, hotkeySeenCount + 1);
+            }
+        } else wasDown = 0;
+        Sleep(binding ? 10 : 100);
+    }
+    watcherState = 2;
+    return 0;
+}
+
+/* Avoid doing config I/O or creating a thread during plugin loading. */
+static void start_hotkey_watcher(void) {
+    if (hotkeyWatcherStarted) return;
+    hotkeyWatcherStarted = 1;
+    InterlockedExchange(&hotkeyWatcherRunning, 1);
+    hotkeyWatcherThread = CreateThread(0, 0, hotkey_watcher, 0, 0, 0);
+    if (!hotkeyWatcherThread) {
+        InterlockedExchange(&hotkeyWatcherRunning, 0);
+        watcherState = 4;
+    }
+}
+static void stop_hotkey_watcher(void) {
+    InterlockedExchange(&hotkeyWatcherRunning, 0);
+    if (hotkeyWatcherThread) {
+        WaitForSingleObject(hotkeyWatcherThread, INFINITE);
+        CloseHandle(hotkeyWatcherThread);
+        hotkeyWatcherThread = 0;
+    }
+    hotkeyWatcherStarted = 0;
+}
+
 static void clear_stats(void) {
     int b;
     for (b = 0; b < 2; ++b) {
