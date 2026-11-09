@@ -1,5 +1,5 @@
 /*
- * AmpSpread Afterburner Edition v1.0.3 - MSI Afterburner 32-bit monitoring plugin.
+ * AmpSpread Afterburner Edition v1.0.4 - MSI Afterburner 32-bit monitoring plugin.
  * Read-only. No direct PSU IO, drivers, services or AmpSpread desktop app dependency.
  *
  * MSI Afterburner SDK interface references:
@@ -12,8 +12,11 @@
 /* Minimal Win32 declarations: builds without an MSVC SDK or CRT. */
 typedef unsigned int DWORD;              /* Win32 DWORD is 32-bit */
 typedef unsigned int UINT;
+typedef unsigned long SIZE_T;  /* 32-bit Win32 target */
+typedef long LONG;             /* Windows LONG is always 32-bit */
 typedef int BOOL;
 typedef void *HANDLE;
+typedef void *HMODULE;
 typedef void *HWND;
 typedef const char *LPCSTR;
 typedef void *LPVOID;
@@ -23,6 +26,15 @@ typedef unsigned char BYTE;
 #define TRUE 1
 #define FALSE 0
 #define FILE_MAP_READ 0x0004u
+#define HOTKEY_SHIFT 1u
+#define HOTKEY_CONTROL 2u
+#define HOTKEY_ALT 4u
+#define HOTKEY_EXTENDED 8u
+#define VK_SHIFT 0x10
+#define VK_CONTROL 0x11
+#define VK_MENU 0x12
+#define KEY_DOWN 0x8000
+#define INFINITE 0xFFFFFFFFu
 #define MB_YESNO 0x00000004u
 #define MB_ICONQUESTION 0x00000020u
 #define IDYES 6
@@ -36,6 +48,13 @@ __declspec(dllimport) BOOL WINAPI UnmapViewOfFile(const void*);
 __declspec(dllimport) BOOL WINAPI CloseHandle(HANDLE);
 __declspec(dllimport) DWORD WINAPI GetTickCount(void);
 __declspec(dllimport) int WINAPI MessageBoxA(HWND, LPCSTR, LPCSTR, UINT);
+__declspec(dllimport) DWORD WINAPI GetModuleFileNameA(HMODULE, char*, DWORD);
+__declspec(dllimport) DWORD WINAPI GetPrivateProfileStringA(LPCSTR, LPCSTR, LPCSTR, char*, DWORD, LPCSTR);
+__declspec(dllimport) short WINAPI GetAsyncKeyState(int);
+__declspec(dllimport) HANDLE WINAPI CreateThread(void*, SIZE_T, DWORD(WINAPI*)(void*), void*, DWORD, DWORD*);
+__declspec(dllimport) void WINAPI Sleep(DWORD);
+__declspec(dllimport) DWORD WINAPI WaitForSingleObject(HANDLE, DWORD);
+__declspec(dllimport) LONG WINAPI InterlockedExchange(volatile LONG*, LONG);
 
 /* This variable satisfies MSVC-compatible float support without a CRT. */
 int _fltused = 0;
@@ -87,6 +106,23 @@ static DWORD lastSampleTick;
 static int haveSampleTick;
 static int activeBank = -1;
 static int dataValid;
+
+/* The hotkey watcher only sets a reset flag; monitoring thread owns statistics. */
+static volatile LONG resetPending;
+static volatile LONG hotkeyWatcherRunning;
+static int hotkeyWatcherStarted;
+static HANDLE hotkeyWatcherThread;
+static volatile LONG hotkeyConfigured;
+static volatile LONG hotkeySeenCount;
+static volatile LONG hotkeyResetAppliedCount;
+static volatile LONG lastHotkeyMainDown;
+static volatile LONG lastHotkeyModifierMatch;
+static volatile LONG watcherConfigRead;
+static volatile LONG watcherConfigError;
+static volatile LONG watcherState;
+static DWORD lastDecodedHotkey;
+static char lastRawHotkey[40];
+static char lastConfigPath[MAX_PATH];
 
 static void clear_stats(void) {
     int b;
@@ -285,7 +321,7 @@ EXPORT BOOL __cdecl SetupSource(DWORD index, HWND window) {
             "Reset 12V-2x6 spread average and maximum for BOTH PSU ports?\n\n"
             "Use Reset between cable comparison tests.\n"
             "Current readings will remain read-only.",
-            "AmpSpread Afterburner Edition 1.0.3 - Reset statistics", MB_YESNO | MB_ICONQUESTION) == IDYES) {
+            "AmpSpread Afterburner Edition 1.0.4 - Reset statistics", MB_YESNO | MB_ICONQUESTION) == IDYES) {
         clear_stats();
     }
     return TRUE;
