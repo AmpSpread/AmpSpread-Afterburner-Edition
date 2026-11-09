@@ -522,4 +522,4 @@ EXPORT float __cdecl GetSourceData(DWORD index) {
     return s->maximum;
 }
 
-EXPORT void __cdecl Uninit(void) { clear_stats(); }
+EXPORT void __cdecl Uninit(void) { stop_hotkey_watcher(); clear_stats(); }
