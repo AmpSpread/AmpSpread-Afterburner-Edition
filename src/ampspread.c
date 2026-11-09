@@ -492,7 +492,7 @@ EXPORT BOOL __cdecl GetSourceDesc(DWORD index, MONITORING_SOURCE_DESC *desc) {
     put_text(desc->szFormat, MAX_PATH, index >= 3 ? "%.0f" : "%.3f");
     put_text(desc->szGroup, MAX_PATH, "AmpSpread Afterburner Edition");
     desc->dwID = ID_PLUGIN_PSU;
-    desc->dwInstance = 0;
+    desc->dwInstance = index;
     desc->fltMinLimit = 0.0f;
     /* Default visual ranges; Afterburner may retain a user's previously saved graph limits. */
     desc->fltMaxLimit = index == 0 ? 1.0f :
